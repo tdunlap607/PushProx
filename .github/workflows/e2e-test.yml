@@ -1,0 +1,63 @@
+---
+name: End-to-End Test
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.x
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install Prometheus
+        run: |
+          PROM_VERSION="3.8.1"
+          curl -sLO https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/prometheus-${PROM_VERSION}.linux-amd64.tar.gz
+          tar xzf prometheus-${PROM_VERSION}.linux-amd64.tar.gz
+          sudo mv prometheus-${PROM_VERSION}.linux-amd64/prometheus /usr/local/bin/
+
+      - name: Install node_exporter
+        run: |
+          NE_VERSION="1.10.2"
+          curl -sLO https://github.com/prometheus/node_exporter/releases/download/v${NE_VERSION}/node_exporter-${NE_VERSION}.linux-amd64.tar.gz
+          tar xzf node_exporter-${NE_VERSION}.linux-amd64.tar.gz
+          sudo mv node_exporter-${NE_VERSION}.linux-amd64/node_exporter /usr/local/bin/
+
+      - name: Build PushProx binaries
+        run: make build
+
+      - name: Create Prometheus config
+        run: |
+          FQDN=$(hostname -f)
+          cat > prometheus.yml << EOF
+          global:
+            scrape_interval: 5s
+
+          scrape_configs:
+            - job_name: 'node'
+              proxy_url: 'http://localhost:8080'
+              static_configs:
+                - targets: ['${FQDN}:9100']
+          EOF
+
+      - name: Run end-to-end test
+        run: |
+          chmod +x end-to-end-test.sh
+          ./end-to-end-test.sh
+        timeout-minutes: 5

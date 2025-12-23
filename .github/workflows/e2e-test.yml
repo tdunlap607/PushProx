@@ -44,7 +44,8 @@ jobs:
 
       - name: Create Prometheus config
         run: |
-          cat > prometheus.yml << 'EOF'
+          FQDN=$(hostname -f)
+          cat > prometheus.yml << EOF
           global:
             scrape_interval: 5s
 
@@ -52,7 +53,7 @@ jobs:
             - job_name: 'node'
               proxy_url: 'http://localhost:8080'
               static_configs:
-                - targets: ['localhost:9100']
+                - targets: ['${FQDN}:9100']
           EOF
 
       - name: Run end-to-end test
